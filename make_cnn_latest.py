@@ -67,12 +67,12 @@ def batch_generator(images, labels, batch_size):
             i = 0
             np.random.shuffle(inds)
         im = mpimg.imread(names[inds[i]])
-        im = im[:, 100:250, :]
+        #im = im[:, 100:250, :]
         #X.append(images[inds[i]])
         X.append(im)
         y_lab = labels[inds[i]]
         y_lab_vec = np.zeros((36,))
-        y_lab_vec[alph_dict[y_lab[1]]] = 1
+        y_lab_vec[alph_dict[y_lab[2]]] = 1
         #y_lab_vec[alph_dict[y_lab[1]] + 36] = 1
         #y_lab_vec[alph_dict[y_lab[2]] + 36 + 36] = 1
         #y_lab_vec[alph_dict[y_lab[3]] + 36 + 36 + 36] = 1
@@ -162,7 +162,7 @@ def inference(x, drop_rate):
         dropout = tf.layers.dropout(pool, rate=drop_rate)
         hidden8 = dropout
         print('hidden 8', hidden8)
-        flatten = tf.reshape(hidden8, [-1, 130*192])
+        flatten = tf.reshape(hidden8, [-1, 13*25*192])
 
     with tf.variable_scope('hidden9'):
         dense = tf.layers.dense(flatten, units=3072, activation=tf.nn.relu)
@@ -181,52 +181,56 @@ def inference(x, drop_rate):
         digit1 = dense
     '''
     with tf.variable_scope('digit2'):
-        dense = tf.layers.dense(hidden10, units=11)
+        dense = tf.layers.dense(hidden10, units=36)
         digit2 = dense
 
     with tf.variable_scope('digit3'):
-        dense = tf.layers.dense(hidden10, units=11)
+        dense = tf.layers.dense(hidden10, units=36)
         digit3 = dense
 
     with tf.variable_scope('digit4'):
-        dense = tf.layers.dense(hidden10, units=11)
+        dense = tf.layers.dense(hidden10, units=36)
         digit4 = dense
-
+    
     with tf.variable_scope('digit5'):
         dense = tf.layers.dense(hidden10, units=11)
         digit5 = dense
      length_logits, digits_logits = length, tf.stack([digit1, digit2, digit3, digit4, digit5], axis=1)
      return length_logits, digits_logits
     '''
-    return digit1 
+    return digit1 #(digit1, digit2, digit3, digit4) 
     
 def loss( digits_logits,  digits_labels):
+    #lab1, lab2, lab3, lab4 = tf.split(digits_labels, num_or_size_splits = 4, axis = 1)
+    #print('lab1', lab1)
     #length_cross_entropy = tf.reduce_mean(tf.losses.sparse_softmax_cross_entropy(labels=length_labels, logits=length_logits))
     digit1_cross_entropy = tf.reduce_mean(tf.losses.softmax_cross_entropy(onehot_labels=digits_labels, logits=digits_logits))
-    #digit2_cross_entropy = tf.reduce_mean(tf.losses.sparse_softmax_cross_entropy(labels=digits_labels[:, 1], logits=digits_logits[:, 1, :]))
-    #digit3_cross_entropy = tf.reduce_mean(tf.losses.sparse_softmax_cross_entropy(labels=digits_labels[:, 2], logits=digits_logits[:, 2, :]))
-    #digit4_cross_entropy = tf.reduce_mean(tf.losses.sparse_softmax_cross_entropy(labels=digits_labels[:, 3], logits=digits_logits[:, 3, :]))
+    #digit2_cross_entropy = tf.reduce_mean(tf.losses.softmax_cross_entropy(onehot_labels=lab2, logits=digits_logits[1]))
+    #digit3_cross_entropy = tf.reduce_mean(tf.losses.softmax_cross_entropy(onehot_labels=lab3, logits=digits_logits[2]))
+    #digit4_cross_entropy = tf.reduce_mean(tf.losses.softmax_cross_entropy(onehot_labels=lab4, logits=digits_logits[3]))
     #digit5_cross_entropy = tf.reduce_mean(tf.losses.sparse_softmax_cross_entropy(labels=digits_labels[:, 4], logits=digits_logits[:, 4, :]))
-    loss = digit1_cross_entropy #length_cross_entropy + digit1_cross_entropy + digit2_cross_entropy + digit3_cross_entropy + digit4_cross_entropy + digit5_cross_entropy
+    loss =  digit1_cross_entropy #+ digit2_cross_entropy + digit3_cross_entropy + digit4_cross_entropy # + digit5_cross_entropy
     return loss
 
 
 
-imagepl = tf.placeholder(tf.float32, [None, 200, 150, 3])
+imagepl = tf.placeholder(tf.float32, [None, 200, 400, 3])
 labelspl = tf.placeholder(tf.int32, [None, 36])
 
 
 dl  = inference(imagepl, 0.2)
-
+print('dl of 0 ', dl[0])
 
 los = loss(dl, labelspl)
 
 
 #acc, acc_op = tf.metrics.accuracy( tf.argmax( labelspl, 0) , tf.argmax( dl, 0))
-arg_label = tf.argmax( labelspl, 1)
+arg_label = tf.argmax(labelspl, 1)
 print('arg_laebl', arg_label)
-sub_val = tf.subtract(arg_label , tf.argmax( dl, 1))
+sub_val = tf.subtract(arg_label , tf.argmax( dl,  1))
 acc_val = tf.count_nonzero(sub_val)
+
+
 
 opt = tf.train.GradientDescentOptimizer(0.001)
 
@@ -237,19 +241,22 @@ sess = tf.Session()
 sess.run(tf.global_variables_initializer())
 tf.local_variables_initializer().run(session = sess)
 saver = tf.train.Saver()
-saver.restore(sess, '/home/ubuntu/latest_cnn3')
+run_loss = []
+#saver.restore(sess, '/home/ubuntu/latest_cnn3')
 for i in range(0, 10000000):
     print('iter', i)
     X, y = next(gen)
-    X = np.reshape(X, (b_size, 200, 150, 3))
+    X = np.reshape(X, (b_size, 200, 400, 3))
     y = np.reshape(y, ( b_size, 36 ))
     feed_dict = {imagepl : X, labelspl :y }
     a, lo, t, s = sess.run([acc_val,  los, train_op, sub_val], feed_dict = feed_dict)
     if i %100 == 0:
-        np.save('acccu.npy', accs)
-        saver.save(sess, '/home/ubuntu/cnn_sec_dig')
+        np.save('acccu_all.npy', accs)
+        np.save('loss_all.npy',run_loss)
+        saver.save(sess, '/home/ubuntu/cnn_thirddig_wide')
     print(lo, '   ', 1.0 - (1.0*a/b_size))
     accs.append(a)
+    run_loss.append(lo)
     #print(s)
     sys.stdout.flush()
 

@@ -24,18 +24,23 @@ import tensorflow as tf
 
 images = []
 names = []
+train_path = 'data2'
 
-for fi in tqdm(os.listdir('data')):
+'''
+for fi in tqdm(os.listdir(train_path)):
     if fi[-3:] == 'jpg':
-        names.append('data/' + fi)
+        names.append(train_path + '/' + fi)
         #images.append(mpimg.imread('data/' + fi))
 
+'''
 
+for i in range(0, 2000000):
+     names.append(train_path + '/' + str(i) + '.jpg')
 
 #print(images)
 
 
-lab_fil = 'data/labels.txt'
+lab_fil = train_path + '/labels.txt'
 
 fi = open(lab_fil, 'r')
 
@@ -57,6 +62,16 @@ j = 0
 for letter in alphabet:
     alph_dict[letter] = j
     j += 1
+
+
+
+
+rev_alph_dict = {}
+
+
+for key in alph_dict:
+    rev_alph_dict[alph_dict[key]] = key
+
 def batch_generator(images, labels, batch_size):
     i = 0
     X = []
@@ -242,23 +257,57 @@ sess.run(tf.global_variables_initializer())
 tf.local_variables_initializer().run(session = sess)
 saver = tf.train.Saver()
 run_loss = []
-#saver.restore(sess, '/home/ubuntu/latest_cnn3')
+#saver.restore(sess, '/home/ubuntu/cnn_thirddig_wide')
+
 for i in range(0, 10000000):
     print('iter', i)
     X, y = next(gen)
     X = np.reshape(X, (b_size, 200, 400, 3))
     y = np.reshape(y, ( b_size, 36 ))
     feed_dict = {imagepl : X, labelspl :y }
-    a, lo, t, s = sess.run([acc_val,  los, train_op, sub_val], feed_dict = feed_dict)
-    if i %100 == 0:
+    a, lo, t, s, dell = sess.run([acc_val,  los, train_op, sub_val, dl], feed_dict = feed_dict)
+    if i %1000 == 0:
         np.save('acccu_all.npy', accs)
         np.save('loss_all.npy',run_loss)
         saver.save(sess, '/home/ubuntu/cnn_thirddig_wide')
     print(lo, '   ', 1.0 - (1.0*a/b_size))
     accs.append(a)
     run_loss.append(lo)
+    print(rev_alph_dict[np.argmax(dell, 1)[0]])
+    print(rev_alph_dict[np.argmax(y, 1)[0]])
     #print(s)
     sys.stdout.flush()
+
+
+
+data_lab = []
+
+
+test_path = 'data'
+for li in open(test_path + '/labels.txt'):
+    data_lab.append(li)
+
+
+
+test_acc = 0
+total = 0
+for fi in os.listdir(test_path):
+    if fi[-3:] == 'jpg':
+        print(fi[0:-4])
+        print(data_lab[int(fi[0:-4])])
+        im = mpimg.imread(test_path + '/' + fi)
+        im = np.reshape(im, (1, 200, 400, 3))
+        la = np.zeros((36,))
+        la = np.reshape(la, (1, 36))
+        soft = sess.run([dl], feed_dict = {imagepl : im, labelspl : la})
+        print(soft[0])
+        print(np.argmax(soft[0], 1))
+        pr = rev_alph_dict[np.argmax(soft[0], 1)[0]]
+        print(pr)
+        if data_lab[int(fi[0:-4])][2] == pr:
+            test_acc += 1
+        total += 1
+        print(test_acc/total)
 
 
 '''
